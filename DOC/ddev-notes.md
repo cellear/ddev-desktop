@@ -21,8 +21,11 @@ Read this before adding a new ddev call to `internal/ddev`.
   dbname, ...}` and `services{web,db,xhgui,...}{status, full_name, image,
   host_ports, ...}`. A project with `omit_containers: [db]` has an empty
   `dbinfo` and no `db` service.
-- `ddev list` orders case-sensitively (uppercase names first). We sort
-  case-insensitively.
+- `ddev list` orders case-sensitively (uppercase names first) and carries
+  no timestamps. ddev rewrites `<approot>/.ddev/.ddev-docker-compose-full.yaml`
+  on every start, so its mtime is "last started"; `config.yaml`'s mtime is
+  the fallback for a project never started. `List()` sorts most recently
+  used first, then by name, and the page shows the first 20 of that.
 - Fixtures: `testdata/list.json` (first 20 projects of this machine),
   `testdata/describe-running.json`, `testdata/describe-stopped.json`.
 

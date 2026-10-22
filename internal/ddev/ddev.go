@@ -11,9 +11,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
 // Project is one entry of `ddev list -j`.
@@ -30,6 +32,10 @@ type Project struct {
 	PrimaryURL      string `json:"primary_url"`
 	MailpitURL      string `json:"mailpit_url"`
 	MailpitHTTPSURL string `json:"mailpit_https_url"`
+
+	// LastUsed is when the project was last started (see lastUsed); zero
+	// when nothing in the project tells us.
+	LastUsed time.Time `json:"last_used"`
 }
 
 // Service is one container of a project as reported by `ddev describe -j`.
@@ -82,16 +88,43 @@ func (r *Runner) command(ctx context.Context, args ...string) *exec.Cmd {
 	return cmd
 }
 
-// List returns every project ddev knows about, sorted by name.
+// List returns every project ddev knows about, most recently used first
+// (ties by name).
 func (r *Runner) List(ctx context.Context) ([]Project, error) {
 	var projects []Project
 	if err := r.runJSON(ctx, &projects, "list"); err != nil {
 		return nil, err
 	}
-	sort.Slice(projects, func(i, j int) bool {
-		return strings.ToLower(projects[i].Name) < strings.ToLower(projects[j].Name)
-	})
+	for i := range projects {
+		projects[i].LastUsed = lastUsed(projects[i].AppRoot)
+	}
+	SortByLastUsed(projects)
 	return projects, nil
+}
+
+// SortByLastUsed orders projects most recently used first, then by name.
+func SortByLastUsed(projects []Project) {
+	sort.SliceStable(projects, func(i, j int) bool {
+		a, b := projects[i], projects[j]
+		if !a.LastUsed.Equal(b.LastUsed) {
+			return a.LastUsed.After(b.LastUsed)
+		}
+		return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+	})
+}
+
+// lastUsed returns when the project at approot was last started. ddev
+// rewrites .ddev/.ddev-docker-compose-full.yaml on every start, so its
+// modification time is that moment. A project that was configured but
+// never started falls back to config.yaml's time; one with no .ddev at all
+// reports the zero time.
+func lastUsed(approot string) time.Time {
+	for _, name := range []string{".ddev-docker-compose-full.yaml", "config.yaml"} {
+		if st, err := os.Stat(filepath.Join(approot, ".ddev", name)); err == nil {
+			return st.ModTime()
+		}
+	}
+	return time.Time{}
 }
 
 // Describe returns the details of one project.

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func fixture(t *testing.T, name string) []byte {
@@ -88,4 +89,63 @@ func TestValidName(t *testing.T) {
 			t.Errorf("%q should be invalid", bad)
 		}
 	}
+}
+
+func TestLastUsedAndSort(t *testing.T) {
+	dir := t.TempDir()
+	mk := func(name string, files map[string]time.Time) string {
+		root := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Join(root, ".ddev"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for f, when := range files {
+			p := filepath.Join(root, ".ddev", f)
+			if err := os.WriteFile(p, []byte("x"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chtimes(p, when, when); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return root
+	}
+	now := time.Now().Truncate(time.Second)
+	started := mk("started", map[string]time.Time{
+		"config.yaml":                    now.Add(-48 * time.Hour),
+		".ddev-docker-compose-full.yaml": now.Add(-1 * time.Hour),
+	})
+	configured := mk("configured", map[string]time.Time{"config.yaml": now.Add(-24 * time.Hour)})
+	empty := mk("empty", nil)
+
+	if got := lastUsed(started); !got.Equal(now.Add(-1 * time.Hour)) {
+		t.Errorf("started: got %v", got)
+	}
+	if got := lastUsed(configured); !got.Equal(now.Add(-24 * time.Hour)) {
+		t.Errorf("configured: got %v", got)
+	}
+	if got := lastUsed(empty); !got.IsZero() {
+		t.Errorf("empty: got %v", got)
+	}
+
+	projects := []Project{
+		{Name: "zeta", LastUsed: lastUsed(empty)},
+		{Name: "beta", LastUsed: lastUsed(configured)},
+		{Name: "alpha", LastUsed: lastUsed(empty)},
+		{Name: "gamma", LastUsed: lastUsed(started)},
+	}
+	SortByLastUsed(projects)
+	want := []string{"gamma", "beta", "alpha", "zeta"}
+	for i, w := range want {
+		if projects[i].Name != w {
+			t.Fatalf("order: got %v", names(projects))
+		}
+	}
+}
+
+func names(ps []Project) []string {
+	out := make([]string, len(ps))
+	for i, p := range ps {
+		out[i] = p.Name
+	}
+	return out
 }
