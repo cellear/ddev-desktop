@@ -1,0 +1,10 @@
+# Go
+bin/
+dist/
+# UI
+ui/node_modules/
+ui/dist/
+# OS
+.DS_Store
+# local tool settings
+.claude/settings.local.json

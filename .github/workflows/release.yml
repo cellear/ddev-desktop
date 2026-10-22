@@ -1,0 +1,46 @@
+name: Release
+
+# Triggered by pushing a version tag: git tag v0.5.0 && git push --tags
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to create the GitHub Release and upload assets
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build the UI
+        run: cd ui && npm ci --no-audit --no-fund && npm run build
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod   # honours whatever version is in go.mod
+
+      - name: Build binaries for all platforms
+        run: |
+          mkdir -p dist
+          for os in darwin linux; do
+            for arch in amd64 arm64; do
+              echo "Building ${os}/${arch}..."
+              GOOS=$os GOARCH=$arch go build \
+                -o dist/ddev-desktop-${os}-${arch} \
+                ./cmd/ddev-desktop/
+            done
+          done
+          ls -lh dist/
+
+      - name: Create GitHub Release and upload binaries
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
