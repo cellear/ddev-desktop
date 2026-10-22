@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -195,7 +196,15 @@ func ParseJSON(data []byte, out any) error {
 // output as it arrives. It returns when ddev exits; a non-zero exit is the
 // returned error. The context cancels the command.
 func (r *Runner) Stream(ctx context.Context, line func(string), args ...string) error {
+	return r.StreamIn(ctx, "", line, args...)
+}
+
+// StreamIn is Stream with the command run in dir ("" for the daemon's own
+// directory). `ddev config` acts on the current directory, so it needs
+// this; commands that take a project name do not.
+func (r *Runner) StreamIn(ctx context.Context, dir string, line func(string), args ...string) error {
 	cmd := r.command(ctx, args...)
+	cmd.Dir = dir
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return err
@@ -215,4 +224,30 @@ func (r *Runner) Stream(ctx context.Context, line func(string), args ...string) 
 	}
 	pr.Close()
 	return cmd.Wait()
+}
+
+// Output runs ddev with args and copies its stdout to w as it is produced
+// (for `ddev export-db`). stderr is collected and becomes the error text on
+// a non-zero exit.
+func (r *Runner) Output(ctx context.Context, w io.Writer, args ...string) error {
+	cmd := r.command(ctx, args...)
+	var stderr bytes.Buffer
+	cmd.Stdout = flushWriter{w}
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("ddev %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return nil
+}
+
+// flushWriter flushes after every write when w can, so a download starts
+// flowing immediately.
+type flushWriter struct{ w io.Writer }
+
+func (f flushWriter) Write(p []byte) (int, error) {
+	n, err := f.w.Write(p)
+	if fl, ok := f.w.(interface{ Flush() }); ok {
+		fl.Flush()
+	}
+	return n, err
 }

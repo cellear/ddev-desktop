@@ -12,10 +12,12 @@ browser on it, and runs the `ddev` command line for everything the page
 shows or changes. DDEV stays the source of truth; the panel keeps only its
 own preferences.
 
-**Status: sprint 1 of 5.** The page lists your first 20 projects with live
-status, shows a project's details, and starts and stops projects while
-streaming ddev's output. Everything else on the page is a placeholder that
-says which sprint it arrives in. See `DOC/implementation-plan.md`.
+**Status: sprint 2 of 5.** The page lists your 20 most recently used
+projects with live status, shows a project's details, starts and stops
+projects while streaming ddev's output, changes a project's PHP version,
+opens its folder and a terminal inside its container, exports its database
+and removes it from DDEV. New and Import are placeholders until sprint 3.
+See `DOC/implementation-plan.md`.
 
 ## Running it (development)
 

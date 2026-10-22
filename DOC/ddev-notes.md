@@ -49,6 +49,24 @@ Every ddev call runs with `DDEV_NONINTERACTIVE=true`, `NO_COLOR=1` and
   ddev print a warning at the top of every command's output. Harmless, and
   the page shows it like any other line.
 
+## Commands used by the site panel (sprint 2)
+
+- `ddev config --php-version X` acts on the current directory, so the
+  daemon runs it with `cmd.Dir = approot` (`StreamIn`). It only rewrites
+  the keys given; nothing else in config.yaml changes. The new version takes
+  effect at the next start, so the daemon follows it with `ddev restart`
+  when the project is running.
+- `ddev export-db <name> --gzip=false` writes plain SQL to stdout and
+  progress to stderr; the daemon pipes stdout straight into the HTTP
+  response. It fails when the project is stopped or has no db container,
+  so the daemon checks describe first and answers 409.
+- `ddev delete <name> -y [-O]` removes containers, volumes and built
+  images and leaves the code and `.ddev/` alone. Without `-O` it first
+  writes a snapshot to `.ddev/db_snapshots/`.
+- Terminal launching: Terminal and iTerm2 accept a command through
+  AppleScript (`do script` / `write text`). Warp has no such verb; `open -a
+  Warp <dir>` opens a tab in the folder and the user types `ddev ssh`.
+
 ## Timings seen
 
 | Command | Time |

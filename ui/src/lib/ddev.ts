@@ -15,36 +15,41 @@ export interface Site {
   httpsurl: string;
   primaryUrl: string;
   mailpitUrl: string;
+  lastUsed: string; // ISO time of the last `ddev start`, or "" when unknown
   https: boolean; // page preference: which of the two URLs to show
 }
 
 export interface SiteDetails {
   phpVersion: string;
   database: string; // "mariadb 11.8 (db)"
+  hasDatabase: boolean;
   webserver: string;
   web: SiteStatus;
   db: SiteStatus;
 }
 
+export type TerminalApp = "Terminal" | "iTerm2" | "Warp";
+
 export interface Settings {
   startOnLaunch: boolean;
   stopOnQuit: boolean;
   verbose: boolean;
-  terminal: "Terminal" | "iTerm2" | "Warp";
+  terminal: TerminalApp;
   httpPort: number;
   httpsPort: number;
   defaultPhp: string;
   tld: string;
 }
 
-export type Action = "start" | "stop" | "restart";
-
 export interface JobResult {
   ok: boolean;
   error: string;
 }
 
-export const PHP_VERSIONS = ["8.1", "8.2", "8.3", "8.4", "8.5"];
+export type OnLine = (line: string) => void;
+
+/** PHP versions DDEV 1.25 offers. */
+export const PHP_VERSIONS = ["7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"];
 export const PROJECT_TYPES = ["drupal11", "drupal10", "drupal7", "backdrop", "wordpress", "php"];
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -54,7 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   terminal: "Terminal",
   httpPort: 80,
   httpsPort: 443,
-  defaultPhp: "8.3",
+  defaultPhp: "8.4",
   tld: "ddev.site",
 };
 
@@ -95,15 +100,29 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     let message = `${res.status} ${res.statusText}`;
     try {
-      const body = (await res.json()) as { error?: string };
-      if (body.error) message = body.error;
+      const text = await res.text();
+      try {
+        const body = JSON.parse(text) as { error?: string };
+        if (body.error) message = body.error;
+      } catch {
+        if (text.trim()) message = text.trim();
+      }
     } catch {
-      /* not JSON */
+      /* keep the status text */
     }
     throw new Error(message);
   }
+  if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+function post(path: string, body?: unknown): RequestInit & { method: string } {
+  return body === undefined
+    ? { method: "POST" }
+    : { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+}
+
+const project = (name: string) => `/api/projects/${encodeURIComponent(name)}`;
 
 interface ApiProject {
   name: string;
@@ -116,6 +135,7 @@ interface ApiProject {
   httpsurl: string;
   primary_url: string;
   mailpit_url: string;
+  last_used: string;
 }
 
 interface ApiDetails extends ApiProject {
@@ -123,6 +143,31 @@ interface ApiDetails extends ApiProject {
   webserver_type: string;
   dbinfo: { database_type: string; database_version: string; dbname: string };
   services: Record<string, { status: string }>;
+}
+
+/**
+ * Starts a job on the daemon and follows its output until ddev exits. Each
+ * output line is passed to onLine as it arrives.
+ */
+async function job(path: string, body: unknown, onLine: OnLine): Promise<JobResult> {
+  let id: string;
+  try {
+    ({ job: id } = await api<{ job: string }>(path, post(path, body)));
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  return new Promise((resolve) => {
+    const es = new EventSource(`/api/jobs/${id}/events`);
+    es.addEventListener("line", (e) => onLine((e as MessageEvent<string>).data));
+    es.addEventListener("exit", (e) => {
+      es.close();
+      resolve(JSON.parse((e as MessageEvent<string>).data) as JobResult);
+    });
+    es.onerror = () => {
+      es.close();
+      resolve({ ok: false, error: "lost the connection to ddev-desktop" });
+    };
+  });
 }
 
 export const ddev = {
@@ -140,16 +185,20 @@ export const ddev = {
       httpsurl: p.httpsurl,
       primaryUrl: p.primary_url,
       mailpitUrl: p.mailpit_url,
+      lastUsed: p.last_used?.startsWith("0001") ? "" : p.last_used,
       https: https[p.name] ?? p.primary_url.startsWith("https"),
     }));
   },
 
   async describe(name: string): Promise<SiteDetails> {
-    const d = await api<ApiDetails>(`/api/projects/${encodeURIComponent(name)}`);
+    const d = await api<ApiDetails>(project(name));
     const db = d.dbinfo ?? { database_type: "", database_version: "", dbname: "" };
     return {
       phpVersion: d.php_version,
-      database: db.database_type ? `${db.database_type} ${db.database_version} (${db.dbname})` : "none (db container omitted)",
+      hasDatabase: !!db.database_type,
+      database: db.database_type
+        ? `${db.database_type} ${db.database_version} (${db.dbname})`
+        : "none (db container omitted)",
       webserver: d.webserver_type,
       web: d.services?.["web"]?.status ?? "stopped",
       db: d.services?.["db"]?.status ?? "stopped",
@@ -169,26 +218,18 @@ export const ddev = {
     write(KEY_SETTINGS, s);
   },
 
-  /**
-   * Runs `ddev <action> <name>` on the daemon. Each output line is passed to
-   * onLine as it arrives; the promise resolves when ddev exits.
-   */
-  async run(name: string, action: Action, onLine: (line: string) => void): Promise<JobResult> {
-    const { job } = await api<{ job: string }>(
-      `/api/projects/${encodeURIComponent(name)}/${action}`,
-      { method: "POST" },
-    );
-    return new Promise((resolve) => {
-      const es = new EventSource(`/api/jobs/${job}/events`);
-      es.addEventListener("line", (e) => onLine((e as MessageEvent<string>).data));
-      es.addEventListener("exit", (e) => {
-        es.close();
-        resolve(JSON.parse((e as MessageEvent<string>).data) as JobResult);
-      });
-      es.onerror = () => {
-        es.close();
-        resolve({ ok: false, error: "lost the connection to ddev-desktop" });
-      };
-    });
-  },
+  // Long-running commands: each returns when ddev exits.
+  start: (name: string, onLine: OnLine) => job(`${project(name)}/start`, undefined, onLine),
+  stop: (name: string, onLine: OnLine) => job(`${project(name)}/stop`, undefined, onLine),
+  restart: (name: string, onLine: OnLine) => job(`${project(name)}/restart`, undefined, onLine),
+  setPhp: (name: string, version: string, onLine: OnLine) =>
+    job(`${project(name)}/php`, { version }, onLine),
+  remove: (name: string, snapshot: boolean, onLine: OnLine) =>
+    job(`${project(name)}/delete`, { snapshot }, onLine),
+
+  // Quick ones.
+  revealCode: (name: string) => api<void>(`${project(name)}/reveal`, post("")),
+  openTerminal: (name: string, app: TerminalApp) => api<void>(`${project(name)}/terminal`, post("", { app })),
+  /** Download URL for a plain SQL dump; the project must be running. */
+  exportUrl: (name: string) => `${project(name)}/export-db`,
 };
