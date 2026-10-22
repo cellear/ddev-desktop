@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Settings as Gear, SquareTerminal } from "lucide-react";
 import { SettingsDialog } from "@/components/settings-dialog";
+import { SiteDialog } from "@/components/site-dialog";
 import {
   ddev,
   DEFAULT_SETTINGS,
@@ -40,13 +41,19 @@ export default function App() {
   const [menu, setMenu] = useState(false);
   const [job, setJob] = useState<Job | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [chooser, setChooser] = useState(false);
+  // Name of a project being created: keep it selected although it is not
+  // in the list yet, so its job log shows in the panel.
+  const pending = useRef<string | null>(null);
 
   const refresh = useCallback(async () => {
     try {
       const list = await ddev.list();
       setSites(list);
       setLoadError(null);
-      setSelected((cur) => (cur && list.some((s) => s.name === cur) ? cur : (list[0]?.name ?? null)));
+      setSelected((cur) =>
+        cur && (list.some((s) => s.name === cur) || cur === pending.current) ? cur : (list[0]?.name ?? null),
+      );
     } catch (e) {
       setLoadError((e as Error).message);
     }
@@ -55,6 +62,7 @@ export default function App() {
   useEffect(() => {
     refresh();
     ddev.getSettings().then(setSettings);
+    ddev.features().then((f) => setChooser(f.chooser)).catch(() => setChooser(false));
     const t = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
     }, POLL_MS);
@@ -99,15 +107,16 @@ export default function App() {
   const running = site?.status === "running";
 
   /** Runs a ddev job for the selected site, showing its output in the log panel. */
-  const runJob = async (label: string, start: (onLine: OnLine) => Promise<JobResult>) => {
-    if (!site || busy) return;
-    const name = site.name;
+  const runJob = async (label: string, start: (onLine: OnLine) => Promise<JobResult>, forName?: string) => {
+    const name = forName ?? site?.name;
+    if (!name || busy) return;
     setJob({ site: name, label, lines: [], done: false, ok: false, error: "" });
     const result = await start((line) =>
       setJob((j) => (j && j.site === name ? { ...j, lines: [...j.lines, line] } : j)),
     );
     setJob((j) => (j && j.site === name ? { ...j, done: true, ...result } : j));
     await refresh();
+    pending.current = null;
     setDetailsTick((n) => n + 1);
     return result;
   };
@@ -233,6 +242,11 @@ export default function App() {
                   <JobLog job={job} onClose={() => setJob(null)} />
                 )}
               </>
+            ) : job && job.site === selected ? (
+              <>
+                <p className="text-[15px]">Creating <b>{job.site}</b>…</p>
+                <JobLog job={job} onClose={() => setJob(null)} />
+              </>
             ) : (
               <p className="mt-20 text-center text-muted-foreground">
                 {loadError ? "ddev-desktop could not list your projects." : "No site selected."}
@@ -282,13 +296,20 @@ export default function App() {
       </div>
 
       {(dialog === "new" || dialog === "import") && (
-        <Modal title={dialog === "new" ? "New Drupal site" : "Import local site"} onClose={() => setDialog(null)}>
-          <p className="mb-6 text-muted-foreground">
-            Creating and importing sites arrives in sprint 3. Until then, run <code>ddev config</code> in the
-            codebase folder and the project appears here.
-          </p>
-          <Footer onCancel={() => setDialog(null)} onOk={() => setDialog(null)} />
-        </Modal>
+        <SiteDialog
+          mode={dialog}
+          settings={settings}
+          chooser={chooser}
+          Modal={Modal}
+          Footer={Footer}
+          onCancel={() => setDialog(null)}
+          onOk={(spec) => {
+            setDialog(null);
+            pending.current = spec.name;
+            setSelected(spec.name);
+            runJob("create", (onLine) => ddev.create(spec, onLine), spec.name);
+          }}
+        />
       )}
       {dialog === "remove" && site && (
         <RemoveDialog
@@ -320,6 +341,7 @@ function busyLabel(label?: string) {
     case "start": return "Starting…";
     case "php": return "Restarting…";
     case "delete": return "Removing…";
+    case "create": return "Creating…";
     default: return "Working…";
   }
 }

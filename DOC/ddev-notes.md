@@ -67,6 +67,29 @@ Every ddev call runs with `DDEV_NONINTERACTIVE=true`, `NO_COLOR=1` and
   AppleScript (`do script` / `write text`). Warp has no such verb; `open -a
   Warp <dir>` opens a tab in the folder and the user types `ddev ssh`.
 
+## Creating and importing (sprint 3)
+
+- `ddev config --auto --project-name N [--project-type T] [--php-version P]
+  [--docroot D]` in the folder. With no type it detects (it found Backdrop
+  from a copied codebase and fixed up its `settings.php` to include
+  `settings.ddev.php`). Running it on a folder that already has
+  `.ddev/config.yaml` merges the given flags into the existing config.
+- `ddev composer create-project drupal/recommended-project:^11` runs inside
+  the (started) project and needs the folder to be empty apart from
+  `.ddev/`. About 3 minutes on this machine; its progress bars arrive as
+  separate lines, which the log panel shows fine. Docroot is `web`; the
+  daemon passes `--docroot web` to config beforehand.
+- `ddev import-db N --file=<path> --no-progress` accepts .sql, .sql.gz,
+  .tar(.gz/.bz2/.xz), .tgz and .zip. The dump must be readable by the
+  daemon's user; it is streamed into the db container by ddev.
+- A codebase copied from an Acquia Dev Desktop site (settings.php that
+  includes Dev Desktop's `loc_*_dd.inc`) imports and starts but answers
+  500 until that include is removed. Not the panel's business; worth a
+  README note for people migrating.
+- `osascript` `choose folder` / `choose file` under `tell application
+  "System Events"` brings the dialog to the front; the user cancelling
+  gives exit status 1 with `-128` in stderr.
+
 ## Timings seen
 
 | Command | Time |
@@ -75,6 +98,8 @@ Every ddev call runs with `DDEV_NONINTERACTIVE=true`, `NO_COLOR=1` and
 | `ddev describe -j` | under 1 s |
 | `ddev start` (images already built, no db) | 6–8 s |
 | `ddev stop` | 3–5 s |
+| `ddev config` + `ddev start` + `import-db` (2 MB dump) | about 25 s |
+| `ddev composer create-project drupal/recommended-project:^11` | about 3 min |
 
 The page polls `ddev list` every 10 s while visible. With 119 projects
 that is noticeable CPU; a future sprint could watch Docker events instead.

@@ -48,9 +48,43 @@ export interface JobResult {
 
 export type OnLine = (line: string) => void;
 
+/** What the daemon reports about a folder and name before anything runs. */
+export interface Check {
+  approot: string;
+  exists: boolean;
+  is_dir: boolean;
+  empty: boolean;
+  has_ddev: boolean;
+  ddev_name: string;
+  ddev_type: string;
+  name_taken: boolean;
+  suggested_name: string;
+  docroot: string;
+  error?: string;
+}
+
+export interface CreateSpec {
+  approot: string;
+  name: string;
+  type: string; // "" = let ddev detect
+  php: string; // "" = DDEV default
+  docroot: string;
+  dump: string; // "" = none
+  create: boolean; // fresh Drupal codebase with Composer
+}
+
+export interface Features {
+  chooser: boolean;
+  os: string;
+}
+
 /** PHP versions DDEV 1.25 offers. */
 export const PHP_VERSIONS = ["7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"];
-export const PROJECT_TYPES = ["drupal11", "drupal10", "drupal7", "backdrop", "wordpress", "php"];
+/** Project types offered in the dialog (ddev config --project-type accepts more). */
+export const PROJECT_TYPES = [
+  "drupal11", "drupal10", "drupal7", "backdrop", "wordpress", "php", "generic",
+  "laravel", "symfony", "typo3", "craftcms",
+];
 
 export const DEFAULT_SETTINGS: Settings = {
   startOnLaunch: true,
@@ -226,6 +260,14 @@ export const ddev = {
     job(`${project(name)}/php`, { version }, onLine),
   remove: (name: string, snapshot: boolean, onLine: OnLine) =>
     job(`${project(name)}/delete`, { snapshot }, onLine),
+
+  // Creating and importing (sprint 3).
+  features: () => api<Features>("/api/features"),
+  check: (approot: string, name: string) =>
+    api<Check>(`/api/check?approot=${encodeURIComponent(approot)}&name=${encodeURIComponent(name)}`),
+  create: (spec: CreateSpec, onLine: OnLine) => job("/api/projects", spec, onLine),
+  /** Native folder/file chooser (macOS); resolves to undefined when cancelled. */
+  choose: (kind: "folder" | "file") => api<{ path: string } | undefined>("/api/choose", post("", { kind })),
 
   // Quick ones.
   revealCode: (name: string) => api<void>(`${project(name)}/reveal`, post("")),

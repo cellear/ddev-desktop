@@ -12,12 +12,13 @@ browser on it, and runs the `ddev` command line for everything the page
 shows or changes. DDEV stays the source of truth; the panel keeps only its
 own preferences.
 
-**Status: sprint 2 of 5.** The page lists your 20 most recently used
+**Status: sprint 3 of 5.** The page lists your 20 most recently used
 projects with live status, shows a project's details, starts and stops
 projects while streaming ddev's output, changes a project's PHP version,
-opens its folder and a terminal inside its container, exports its database
-and removes it from DDEV. New and Import are placeholders until sprint 3.
-See `DOC/implementation-plan.md`.
+opens its folder and a terminal inside its container, exports its database,
+removes it from DDEV, imports an existing codebase (with an optional
+database dump) and creates a fresh Drupal codebase with Composer. Settings
+are still local to the page until sprint 4. See `DOC/implementation-plan.md`.
 
 ## Running it (development)
 

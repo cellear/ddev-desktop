@@ -13,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cellear/ddev-desktop/internal/ddev"
@@ -29,6 +30,10 @@ type Server struct {
 	Log    *log.Logger
 
 	jobs *jobs
+
+	listMu    sync.Mutex
+	listCache []ddev.Project
+	listAt    time.Time
 }
 
 // Handler returns the routed, guarded handler.
@@ -38,7 +43,11 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", s.health)
+	mux.HandleFunc("GET /api/features", s.features)
+	mux.HandleFunc("GET /api/check", s.check)
+	mux.HandleFunc("POST /api/choose", s.choose)
 	mux.HandleFunc("GET /api/projects", s.listProjects)
+	mux.HandleFunc("POST /api/projects", s.createProject)
 	mux.HandleFunc("GET /api/projects/{name}", s.describe)
 	mux.HandleFunc("POST /api/projects/{name}/php", s.setPHP)
 	mux.HandleFunc("POST /api/projects/{name}/delete", s.deleteProject)
