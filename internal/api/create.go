@@ -300,7 +300,8 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 	if dump != "" {
 		title += " + import-db"
 	}
-	j := s.jobs.start(title, func(line func(string)) error {
+	s.markStarted(spec.Name)
+	j := s.jobs.start(spec.Name, "create", title, func(line func(string)) error {
 		ctx := context.Background()
 		if spec.Create {
 			line("Creating " + approot)

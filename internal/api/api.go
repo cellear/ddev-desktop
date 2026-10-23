@@ -28,8 +28,11 @@ type Server struct {
 	Limit  int    // maximum projects returned by /api/projects
 	Static fs.FS  // the built page (ui/dist)
 	Log    *log.Logger
+	// StateDir holds settings.json and state.json (~/.ddev-desktop).
+	StateDir string
 
-	jobs *jobs
+	jobs    *jobs
+	started map[string]bool // projects this daemon started; see settings.go
 
 	listMu    sync.Mutex
 	listCache []ddev.Project
@@ -55,7 +58,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/projects/{name}/terminal", s.terminal)
 	mux.HandleFunc("GET /api/projects/{name}/export-db", s.exportDB)
 	mux.HandleFunc("POST /api/projects/{name}/{action}", s.action)
+	mux.HandleFunc("GET /api/jobs", s.listJobs)
 	mux.HandleFunc("GET /api/jobs/{id}/events", s.jobEvents)
+	mux.HandleFunc("GET /api/settings", s.getSettings)
+	mux.HandleFunc("PUT /api/settings", s.putSettings)
+	mux.HandleFunc("POST /api/edit", s.edit)
+	mux.HandleFunc("GET /api/projects/{name}/logs", s.logs)
 	mux.Handle("/", http.FileServer(http.FS(s.Static)))
 	return s.guard(mux)
 }
@@ -155,7 +163,10 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	args = append(append([]string{}, args...), name)
-	j := s.jobs.start(fmt.Sprintf("ddev %s", strings.Join(args, " ")), func(line func(string)) error {
+	if act == "start" || act == "restart" {
+		s.markStarted(name)
+	}
+	j := s.jobs.start(name, act, fmt.Sprintf("ddev %s", strings.Join(args, " ")), func(line func(string)) error {
 		// Not the request context: the command keeps running if the page
 		// disconnects, which is what a user who closed the tab expects.
 		return s.DDEV.Stream(context.Background(), line, args...)
@@ -164,6 +175,10 @@ func (s *Server) action(w http.ResponseWriter, r *http.Request) {
 		s.Log.Printf("job %s: %s", j.id, j.title)
 	}
 	writeJSON(w, map[string]any{"job": j.id, "title": j.title})
+}
+
+func (s *Server) listJobs(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, map[string]any{"jobs": s.jobs.active()})
 }
 
 // jobEvents streams a job's output as Server-Sent Events: one "line" event
@@ -211,6 +226,13 @@ func (s *Server) jobEvents(w http.ResponseWriter, r *http.Request) {
 			fl.Flush()
 		}
 	}
+}
+
+func joinArgs(args []string) string { return strings.Join(args, " ") }
+
+func jsonExit(errText string) []byte {
+	b, _ := json.Marshal(map[string]any{"ok": errText == "", "error": errText})
+	return b
 }
 
 func writeJSON(w http.ResponseWriter, v any) {

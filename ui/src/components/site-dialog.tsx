@@ -28,7 +28,7 @@ export function SiteDialog({ mode, settings, chooser, onCancel, onOk, Modal, Foo
   const [name, setName] = useState("");
   const [nameTouched, setNameTouched] = useState(false);
   const [type, setType] = useState<string>(mode === "new" ? "drupal11" : "");
-  const [php, setPhp] = useState("");
+  const [php, setPhp] = useState(settings.defaultPhp);
   const [dbMode, setDbMode] = useState<"new" | "import">("new");
   const [dump, setDump] = useState("");
   const [check, setCheck] = useState<Check | null>(null);

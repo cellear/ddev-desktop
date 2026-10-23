@@ -105,6 +105,32 @@ Every ddev call runs with `DDEV_NONINTERACTIVE=true`, `NO_COLOR=1` and
   "System Events"` brings the dialog to the front; the user cancelling
   gives exit status 1 with `-128` in stderr.
 
+## Settings and logs (sprint 4)
+
+- `ddev config global` with no flags prints every global as `key=value`,
+  one per line, in about 0.2 s. With flags it writes them and prints the
+  same listing. Keys use dashes (`router-http-port`, `project-tld`);
+  the YAML uses underscores.
+- DDEV 1.25 substitutes router ports when the configured ones are busy:
+  the router container carries the label
+  `com.ddev.router-port-substitutions: 443=33001,80=33000` and every
+  project's URLs get the substituted port. The configured values stay
+  80/443. The panel shows both (active ports come from a running project's
+  URL in `ddev list`).
+- `ddev logs -f -s web --tail N <name>` wraps `docker logs -f`. Killing
+  only the ddev process leaves `docker logs` holding the output pipe, so
+  the runner puts each command in its own process group and kills the
+  group on context cancel (`internal/ddev/proc_unix.go`); the stream then
+  ends within the 2 s `WaitDelay`. Side effect: Ctrl-C in the daemon's
+  terminal no longer reaches child ddev processes, which is what we want
+  (a `ddev start` in flight finishes).
+- `ddev stop <name>` takes about 3 s; `ddev start` on an already-running
+  project is quick and harmless, so start-on-launch does not check first.
+- With four projects running, `ddev list -j` took 4.5–5 s and even a
+  failing `ddev describe` took 6 s. The polling question stands.
+- `open -t <file>` opens the default text editor (TextEdit unless changed);
+  `open <folder>` opens Finder.
+
 ## Timings seen
 
 | Command | Time |

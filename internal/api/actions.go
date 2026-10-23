@@ -63,7 +63,7 @@ func (s *Server) setPHP(w http.ResponseWriter, r *http.Request) {
 	if running {
 		title += " && ddev restart " + d.Name
 	}
-	j := s.jobs.start(title, func(line func(string)) error {
+	j := s.jobs.start(d.Name, "php", title, func(line func(string)) error {
 		ctx := context.Background()
 		if err := s.DDEV.StreamIn(ctx, d.AppRoot, line, "config", "--php-version", body.Version); err != nil {
 			return err
@@ -102,7 +102,7 @@ func (s *Server) deleteProject(w http.ResponseWriter, r *http.Request) {
 	if !snapshot {
 		args = append(args, "-O")
 	}
-	j := s.jobs.start("ddev "+strings.Join(args[:], " "), func(line func(string)) error {
+	j := s.jobs.start(name, "delete", "ddev "+strings.Join(args[:], " "), func(line func(string)) error {
 		return s.DDEV.Stream(context.Background(), line, args...)
 	})
 	s.logf("job %s: %s", j.id, j.title)

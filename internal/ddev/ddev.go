@@ -10,12 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -67,6 +69,23 @@ type Details struct {
 // Runner executes ddev. Bin is the executable (default "ddev", found on PATH).
 type Runner struct {
 	Bin string
+
+	// Verbose makes every invocation and its duration go to Log (the
+	// "Verbose logging" setting). Log may be nil.
+	Verbose atomic.Bool
+	Log     *log.Logger
+}
+
+// trace logs one finished invocation when Verbose is on.
+func (r *Runner) trace(start time.Time, args []string, err error) {
+	if !r.Verbose.Load() || r.Log == nil {
+		return
+	}
+	status := "ok"
+	if err != nil {
+		status = "error: " + err.Error()
+	}
+	r.Log.Printf("ddev %s: %s in %s", strings.Join(args, " "), status, time.Since(start).Round(time.Millisecond))
 }
 
 // New returns a Runner that uses the ddev on PATH.
@@ -86,7 +105,32 @@ func (r *Runner) command(ctx context.Context, args ...string) *exec.Cmd {
 		"NO_COLOR=1",
 		"TERM=dumb",
 	)
+	// ddev spawns docker; when a context cancels a command (a page stops
+	// following `ddev logs`), the whole process group must go, or the
+	// grandchild keeps our output pipe open.
+	setProcessGroup(cmd)
+	cmd.WaitDelay = 2 * time.Second
 	return cmd
+}
+
+// GlobalConfig returns `ddev config global`'s key=value lines as a map.
+func (r *Runner) GlobalConfig(ctx context.Context) (map[string]string, error) {
+	start := time.Now()
+	cmd := r.command(ctx, "config", "global")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	err := cmd.Run()
+	r.trace(start, []string{"config", "global"}, err)
+	if err != nil {
+		return nil, fmt.Errorf("ddev config global: %w: %s", err, strings.TrimSpace(stderr.String()))
+	}
+	out := map[string]string{}
+	for _, l := range strings.Split(stdout.String(), "\n") {
+		if k, v, ok := strings.Cut(strings.TrimSpace(l), "="); ok {
+			out[k] = v
+		}
+	}
+	return out, nil
 }
 
 // List returns every project ddev knows about, most recently used first
@@ -146,7 +190,9 @@ func (r *Runner) runJSON(ctx context.Context, out any, args ...string) error {
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
+	start := time.Now()
 	runErr := cmd.Run()
+	r.trace(start, args, runErr)
 	if err := ParseJSON(stdout.Bytes(), out); err != nil {
 		if runErr != nil {
 			// ddev logs its fatal message as JSON on stderr; prefer that text.
@@ -205,6 +251,7 @@ func (r *Runner) Stream(ctx context.Context, line func(string), args ...string) 
 func (r *Runner) StreamIn(ctx context.Context, dir string, line func(string), args ...string) error {
 	cmd := r.command(ctx, args...)
 	cmd.Dir = dir
+	start := time.Now()
 	pr, pw, err := os.Pipe()
 	if err != nil {
 		return err
@@ -223,7 +270,9 @@ func (r *Runner) StreamIn(ctx context.Context, dir string, line func(string), ar
 		line(strings.TrimRight(sc.Text(), "\r"))
 	}
 	pr.Close()
-	return cmd.Wait()
+	err = cmd.Wait()
+	r.trace(start, args, err)
+	return err
 }
 
 // Output runs ddev with args and copies its stdout to w as it is produced
@@ -234,7 +283,10 @@ func (r *Runner) Output(ctx context.Context, w io.Writer, args ...string) error 
 	var stderr bytes.Buffer
 	cmd.Stdout = flushWriter{w}
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
+	start := time.Now()
+	err := cmd.Run()
+	r.trace(start, args, err)
+	if err != nil {
 		return fmt.Errorf("ddev %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
 	}
 	return nil

@@ -41,11 +41,12 @@ func main() {
 	port := flag.Int("port", 0, "port to listen on (default: a free one)")
 	limit := flag.Int("limit", 20, "maximum number of projects to show")
 	noOpen := flag.Bool("no-open", false, "do not open the browser")
+	stateFlag := flag.String("state-dir", "", "where daemon.json, settings.json and state.json live (default ~/.ddev-desktop)")
 	flag.Parse()
 
 	logger := log.New(os.Stderr, "ddev-desktop: ", log.Ltime)
 
-	dir, err := stateDir()
+	dir, err := stateDir(*stateFlag)
 	if err != nil {
 		logger.Fatal(err)
 	}
@@ -82,16 +83,21 @@ func main() {
 	}
 	defer os.Remove(infoPath)
 
+	runner := ddev.New()
+	runner.Log = logger
+	server := &api.Server{
+		DDEV:     runner,
+		Token:    token,
+		Limit:    *limit,
+		Static:   static,
+		Log:      logger,
+		StateDir: dir,
+	}
 	srv := &http.Server{
-		Handler: (&api.Server{
-			DDEV:   ddev.New(),
-			Token:  token,
-			Limit:  *limit,
-			Static: static,
-			Log:    logger,
-		}).Handler(),
+		Handler:           server.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	server.OnLaunch()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -109,15 +115,23 @@ func main() {
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Fatal(err)
 	}
+	// Record what the panel had running and, if asked, stop it. ddev stop
+	// takes a few seconds per project.
+	quitCtx, cancelQuit := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancelQuit()
+	server.OnQuit(quitCtx)
 	logger.Print("stopped")
 }
 
-func stateDir() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
+func stateDir(override string) (string, error) {
+	dir := override
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		dir = filepath.Join(home, ".ddev-desktop")
 	}
-	dir := filepath.Join(home, ".ddev-desktop")
 	return dir, os.MkdirAll(dir, 0o700)
 }
 

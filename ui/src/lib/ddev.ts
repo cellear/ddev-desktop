@@ -30,15 +30,36 @@ export interface SiteDetails {
 
 export type TerminalApp = "Terminal" | "iTerm2" | "Warp";
 
+/**
+ * Settings as the page sees them. The first group is the panel's own
+ * (kept by the daemon in ~/.ddev-desktop/settings.json); the second is
+ * DDEV's global config, read from and written through `ddev config global`.
+ */
 export interface Settings {
   startOnLaunch: boolean;
   stopOnQuit: boolean;
   verbose: boolean;
   terminal: TerminalApp;
-  httpPort: number;
-  httpsPort: number;
-  defaultPhp: string;
+  defaultPhp: string; // preselected for new sites; "" = DDEV's default
+  httpPort: string;
+  httpsPort: string;
   tld: string;
+  activeHttpPort: string; // what the router listens on now ("" = nothing running)
+  activeHttpsPort: string;
+  globalConfigPath: string;
+}
+
+export interface SaveResult {
+  settings: Settings;
+  applied: string[]; // ddev config global flags that were run
+  output: string[];
+}
+
+export interface JobInfo {
+  id: string;
+  title: string;
+  name: string;
+  label: string;
 }
 
 export interface JobResult {
@@ -99,13 +120,18 @@ export const DEFAULT_SETTINGS: Settings = {
   stopOnQuit: true,
   verbose: false,
   terminal: "Terminal",
-  httpPort: 80,
-  httpsPort: 443,
-  defaultPhp: "8.4",
+  defaultPhp: "",
+  httpPort: "80",
+  httpsPort: "443",
   tld: "ddev.site",
+  activeHttpPort: "",
+  activeHttpsPort: "",
+  globalConfigPath: "",
 };
 
-const KEY_SETTINGS = "ddev-desktop.settings";
+/** DDEV's own defaults for the Ports tab's "Revert to defaults". */
+export const DDEV_DEFAULT_PORTS = { httpPort: "80", httpsPort: "443", tld: "ddev.site" };
+
 const KEY_HTTPS = "ddev-desktop.https"; // { [name]: true }
 
 function read<T>(key: string, fallback: T): T {
@@ -187,17 +213,37 @@ interface ApiDetails extends ApiProject {
   services: Record<string, { status: string }>;
 }
 
-/**
- * Starts a job on the daemon and follows its output until ddev exits. Each
- * output line is passed to onLine as it arrives.
- */
-async function job(path: string, body: unknown, onLine: OnLine): Promise<JobResult> {
-  let id: string;
-  try {
-    ({ job: id } = await api<{ job: string }>(path, post(path, body)));
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
+interface ApiSettings {
+  panel: { default_php: string; terminal: TerminalApp; start_on_launch: boolean; stop_on_quit: boolean; verbose: boolean };
+  global: { router_http_port: string; router_https_port: string; project_tld: string; active_http_port: string; active_https_port: string };
+  files: { global_config: string };
+}
+
+function fromApiSettings(a: ApiSettings): Settings {
+  return {
+    startOnLaunch: a.panel.start_on_launch,
+    stopOnQuit: a.panel.stop_on_quit,
+    verbose: a.panel.verbose,
+    terminal: a.panel.terminal,
+    defaultPhp: a.panel.default_php,
+    httpPort: a.global.router_http_port,
+    httpsPort: a.global.router_https_port,
+    tld: a.global.project_tld,
+    activeHttpPort: a.global.active_http_port,
+    activeHttpsPort: a.global.active_https_port,
+    globalConfigPath: a.files.global_config,
+  };
+}
+
+function toApiSettings(s: Settings): Omit<ApiSettings, "files"> {
+  return {
+    panel: { default_php: s.defaultPhp, terminal: s.terminal, start_on_launch: s.startOnLaunch, stop_on_quit: s.stopOnQuit, verbose: s.verbose },
+    global: { router_http_port: s.httpPort, router_https_port: s.httpsPort, project_tld: s.tld, active_http_port: "", active_https_port: "" },
+  };
+}
+
+/** Follows a job already running on the daemon until ddev exits; the whole log so far is replayed first. */
+function attach(id: string, onLine: OnLine): Promise<JobResult> {
   return new Promise((resolve) => {
     const es = new EventSource(`/api/jobs/${id}/events`);
     es.addEventListener("line", (e) => onLine((e as MessageEvent<string>).data));
@@ -210,6 +256,20 @@ async function job(path: string, body: unknown, onLine: OnLine): Promise<JobResu
       resolve({ ok: false, error: "lost the connection to ddev-desktop" });
     };
   });
+}
+
+/**
+ * Starts a job on the daemon and follows its output until ddev exits. Each
+ * output line is passed to onLine as it arrives.
+ */
+async function job(path: string, body: unknown, onLine: OnLine): Promise<JobResult> {
+  let id: string;
+  try {
+    ({ job: id } = await api<{ job: string }>(path, post(path, body)));
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+  return attach(id, onLine);
 }
 
 export const ddev = {
@@ -254,10 +314,42 @@ export const ddev = {
   },
 
   async getSettings(): Promise<Settings> {
-    return { ...DEFAULT_SETTINGS, ...read(KEY_SETTINGS, {}) };
+    return fromApiSettings(await api<ApiSettings>("/api/settings"));
   },
-  async saveSettings(s: Settings) {
-    write(KEY_SETTINGS, s);
+  /** Saves panel settings and runs `ddev config global` for changed global values. */
+  async saveSettings(s: Settings): Promise<SaveResult> {
+    const r = await api<{ settings: ApiSettings; applied: string[]; output: string[] }>("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toApiSettings(s)),
+    });
+    return { settings: fromApiSettings(r.settings), applied: r.applied ?? [], output: r.output ?? [] };
+  },
+
+  /** Jobs still running on the daemon (e.g. after a reload, or started at launch). */
+  jobs: () => api<{ jobs: JobInfo[] }>("/api/jobs").then((r) => r.jobs),
+  attach,
+
+  /** Opens a configuration file in the default editor, or a configuration folder in the file manager. */
+  edit: (what: "config" | "php" | "mysql" | "global", projectName = "") =>
+    api<{ path: string }>("/api/edit", post("", { project: projectName, what })),
+
+  /**
+   * Follows `ddev logs -f` for a service. Returns a function that stops
+   * following (which also ends the ddev process on the daemon).
+   */
+  followLogs(name: string, service: string, onLine: OnLine, onExit: (r: JobResult) => void): () => void {
+    const es = new EventSource(`${project(name)}/logs?service=${encodeURIComponent(service)}&tail=200`);
+    es.addEventListener("line", (e) => onLine((e as MessageEvent<string>).data));
+    es.addEventListener("exit", (e) => {
+      es.close();
+      onExit(JSON.parse((e as MessageEvent<string>).data) as JobResult);
+    });
+    es.onerror = () => {
+      es.close();
+      onExit({ ok: false, error: "lost the connection to ddev-desktop" });
+    };
+    return () => es.close();
   },
 
   // Long-running commands: each returns when ddev exits.

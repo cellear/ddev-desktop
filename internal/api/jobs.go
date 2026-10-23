@@ -11,6 +11,8 @@ import (
 type job struct {
 	id    string
 	title string
+	name  string // project the job is about ("" for none)
+	label string // short verb for the page: start, stop, create, ...
 
 	mu       sync.Mutex
 	lines    []string
@@ -67,10 +69,10 @@ const keepFinished = 10 * time.Minute
 
 func newJobs() *jobs { return &jobs{byID: map[string]*job{}} }
 
-// start registers a job and runs fn in the background. fn receives the
-// function to call for each output line.
-func (js *jobs) start(title string, fn func(line func(string)) error) *job {
-	j := &job{id: newID(), title: title, changed: make(chan struct{})}
+// start registers a job about project name and runs fn in the background.
+// fn receives the function to call for each output line.
+func (js *jobs) start(name, label, title string, fn func(line func(string)) error) *job {
+	j := &job{id: newID(), title: title, name: name, label: label, changed: make(chan struct{})}
 	js.mu.Lock()
 	js.purge()
 	js.byID[j.id] = j
@@ -83,6 +85,30 @@ func (js *jobs) get(id string) *job {
 	js.mu.Lock()
 	defer js.mu.Unlock()
 	return js.byID[id]
+}
+
+// jobInfo is what GET /api/jobs reports about an unfinished job.
+type jobInfo struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Name  string `json:"name"`
+	Label string `json:"label"`
+}
+
+// active lists the jobs that have not finished.
+func (js *jobs) active() []jobInfo {
+	js.mu.Lock()
+	defer js.mu.Unlock()
+	out := []jobInfo{}
+	for _, j := range js.byID {
+		j.mu.Lock()
+		done := j.done
+		j.mu.Unlock()
+		if !done {
+			out = append(out, jobInfo{ID: j.id, Title: j.title, Name: j.name, Label: j.label})
+		}
+	}
+	return out
 }
 
 // purge drops finished jobs older than keepFinished. Callers hold js.mu.

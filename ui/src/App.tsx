@@ -61,8 +61,24 @@ export default function App() {
 
   useEffect(() => {
     refresh();
-    ddev.getSettings().then(setSettings);
+    ddev.getSettings().then(setSettings).catch((e: Error) => setNotice(`Settings: ${e.message}`));
     ddev.features().then((f) => setChooser(f.chooser)).catch(() => setChooser(false));
+    // A job may already be running: started at launch, or left from before a
+    // reload. Show it and follow it to the end.
+    ddev.jobs().then((jobs) => {
+      const j = jobs[0];
+      if (!j) return;
+      pending.current = j.name;
+      setSelected(j.name);
+      setJob({ site: j.name, label: j.label, lines: [], done: false, ok: false, error: "" });
+      ddev.attach(j.id, (line) => setJob((cur) => (cur && cur.site === j.name ? { ...cur, lines: [...cur.lines, line] } : cur)))
+        .then(async (result) => {
+          setJob((cur) => (cur && cur.site === j.name ? { ...cur, done: true, ...result } : cur));
+          pending.current = null;
+          await refresh();
+          setDetailsTick((n) => n + 1);
+        });
+    }).catch(() => undefined);
     const t = setInterval(() => {
       if (document.visibilityState === "visible") refresh();
     }, POLL_MS);
@@ -129,7 +145,7 @@ export default function App() {
     }
   };
 
-  const phpLabel = (v: string) => (v === "default" ? `Default (${settings.defaultPhp})` : v);
+  const phpLabel = (v: string) => (v === "default" ? `Default (${settings.defaultPhp || "DDEV"})` : v);
   const dotClass = (s: Site) =>
     s.status === "running" ? "bg-light-green" : s.status === "paused" ? "bg-light-yellow" : "bg-status-off";
 
@@ -328,7 +344,18 @@ export default function App() {
           sites={sites}
           selected={selected}
           onCancel={() => setDialog(null)}
-          onOk={(s) => { setSettings(s); ddev.saveSettings(s); setDialog(null); }}
+          onOk={async (s) => {
+            setDialog(null);
+            setSettings(s);
+            try {
+              const r = await ddev.saveSettings(s);
+              setSettings(r.settings);
+              if (r.applied.length) setNotice("DDEV global config updated. Sites use the new ports/TLD from their next start.");
+            } catch (e) {
+              setNotice(`Settings: ${(e as Error).message}`);
+              ddev.getSettings().then(setSettings).catch(() => undefined);
+            }
+          }}
         />
       )}
     </div>
