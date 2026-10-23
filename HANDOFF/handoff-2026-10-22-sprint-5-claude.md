@@ -84,8 +84,18 @@ is not left installed.
 - `cmd/ddev-desktop/main.go`, `Makefile`, `.github/workflows/release.yml`
 - `README.md` (rewritten), `DOC/sprints/sprint-5.md` (new), `DOC/ddev-notes.md`
 
+## Release and acceptance
+
+Luke created the public repo `cellear/ddev-desktop`, pushed and tagged
+`v0.1.0`. The workflow did not fire for the tag pushed in the same second
+the workflow file first arrived; deleting and re-pushing the tag fixed it.
+Release v0.1.0 holds the four binaries and checksums.txt. On a clean
+project `ddev add-on get cellear/ddev-desktop` and `ddev desktop`
+downloaded the darwin-arm64 binary and opened the panel. Luke: "It's
+great!" Sprint 5 accepted 2026-10-22.
+
 ## Next
 
-Luke: create the GitHub repo, push, tag `v0.1.0`, wait for the release
+Improvements, to be chosen with Luke. Originally: create the GitHub repo, push, tag `v0.1.0`, wait for the release
 workflow, then on a clean shell: `ddev add-on get cellear/ddev-desktop &&
 ddev desktop`. After that, the follow-ups above.
