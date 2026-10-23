@@ -87,6 +87,8 @@ Not available on Linux (button hidden when the daemon reports no chooser).
   Verified: both installers answer; see `DOC/ddev-notes.md`.
 - Favicon is now DDEV's icon instead of the Lovable one.
 
+**Accepted** by Luke on 2026-10-22 after the follow-ups above.
+
 ## Demo
 
 1. More → Import local site… → Choose… → pick `DevDesktop-sites/duotest`;

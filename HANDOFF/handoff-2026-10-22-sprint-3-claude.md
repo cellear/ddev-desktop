@@ -102,6 +102,12 @@ accidental `dd-empty` were deleted through the API; folders removed.
 - Sprint 3 open question "only Drupal via Composer" is resolved for
   WordPress and Joomla. Remaining types import only.
 
+## Acceptance
+
+Luke ran the sprint 3 acceptance tests on 2026-10-22, including the native
+Choose… buttons, and the WordPress/Joomla follow-up: "Worked great."
+Sprint 3 accepted.
+
 ## Next
 
 Sprint 4: Settings. Ports and TLD through `ddev config global`; panel
