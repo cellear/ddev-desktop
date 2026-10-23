@@ -91,6 +91,9 @@ appearing as the site is hit; Stop ends the stream; the ddev process is gone.
 
 ---
 
+**Accepted** by Luke on 2026-10-22 (Config tab options still to be
+tried one by one before a release).
+
 ## Out of scope
 
 - Per-project `ddev config` options (webserver type, database, Node.js,

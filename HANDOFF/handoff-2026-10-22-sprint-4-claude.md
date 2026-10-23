@@ -103,6 +103,15 @@ closing the dialog ended the ddev process. Screenshot
 - `DOC/sprints/sprint-4.md` (new), `DOC/ddev-notes.md`, `README.md`
 - `SCREENSHOTS/sprint-4-settings-logs.jpg`
 
+## Acceptance
+
+Luke, 2026-10-22: "I love the functionality in the settings, the log files
+are great. I didn't test that all the config options work, though I should
+before release. However, it's good enough to pass the sprint." Sprint 4
+accepted; Luke to try every Config option before a release. On
+stop-on-quit Luke is unsure about panel-started-only; left as is, noted
+above.
+
 ## Next
 
 Sprint 5: ship as an add-on. `commands/host/desktop` (find or download
