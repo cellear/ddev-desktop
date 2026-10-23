@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #ddev-generated
+#ddev-silent-no-warn
 ## Description: Open DDEV Desktop, a control panel for your DDEV projects, in your browser
 ## Usage: desktop [--update] [--port N] [--no-open] [--limit N] [--version]
 ## Example: "ddev desktop" or "ddev desktop --update" or "ddev desktop --port 8471 --no-open"

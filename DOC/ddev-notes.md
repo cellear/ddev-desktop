@@ -149,6 +149,20 @@ Every ddev call runs with `DDEV_NONINTERACTIVE=true`, `NO_COLOR=1` and
 - Host commands inherit the environment, so `DDEV_DESKTOP_BIN=… ddev
   desktop` works as a development override.
 
+## Own window and search (sprint 6)
+
+- Chromium's `--app=URL` gives a real OS window without tabs or address
+  bar. On macOS `open -na "<Browser>" --args --window-size=1100,720
+  --app=URL` works whether or not the browser is already running. The
+  page sees `display-mode: standalone`. Safari and Firefox have nothing
+  comparable.
+- `ddev start` lists every custom file with `#ddev-generated` under
+  "Custom configuration detected", including global host commands
+  installed by an add-on, and suggests `#ddev-silent-no-warn`. The host
+  command carries that marker now.
+- `ddev list -j` returns all projects anyway, so returning them all to
+  the page costs nothing extra; the display limit is a page concern.
+
 ## Timings seen
 
 | Command | Time |

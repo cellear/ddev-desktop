@@ -26,12 +26,13 @@ import (
 type PanelSettings struct {
 	DefaultPHP    string `json:"default_php"` // preselected for new sites; "" = DDEV's default
 	Terminal      string `json:"terminal"`    // Terminal, iTerm2, Warp
+	Window        string `json:"window"`      // "app" (Chromium app window) or "tab" (default browser)
 	StartOnLaunch bool   `json:"start_on_launch"`
 	StopOnQuit    bool   `json:"stop_on_quit"`
 	Verbose       bool   `json:"verbose"`
 }
 
-var defaultPanel = PanelSettings{Terminal: "Terminal", StartOnLaunch: true, StopOnQuit: true}
+var defaultPanel = PanelSettings{Terminal: "Terminal", Window: "app", StartOnLaunch: true, StopOnQuit: true}
 
 // GlobalSettings is the slice of `ddev config global` the page shows, plus
 // the ports the router really listens on: DDEV 1.25 substitutes others
@@ -66,6 +67,9 @@ func (s *Server) Panel() PanelSettings {
 	data, err := os.ReadFile(s.settingsPath())
 	if err == nil {
 		_ = json.Unmarshal(data, &p)
+	}
+	if p.Window == "" {
+		p.Window = defaultPanel.Window
 	}
 	return p
 }
@@ -156,6 +160,12 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	case "Terminal", "iTerm2", "Warp":
 	default:
 		http.Error(w, "unknown terminal app", http.StatusBadRequest)
+		return
+	}
+	switch in.Panel.Window {
+	case "app", "tab":
+	default:
+		http.Error(w, "window must be app or tab", http.StatusBadRequest)
 		return
 	}
 	if in.Panel.DefaultPHP != "" && !validPHP.MatchString(in.Panel.DefaultPHP) {

@@ -72,12 +72,14 @@ export function SettingsDialog({ initial, sites, selected, onCancel, onOk }: {
               </Tabs.List>
               <div className="-mt-3 min-h-[330px] rounded-md border border-border bg-selection/35 px-4 pb-6 pt-8 sm:min-h-[380px] sm:px-5">
                 <Tabs.Content value="General" className="space-y-4">
+                  <div className={row}><label htmlFor="settings-window">Open in</label><select id="settings-window" className="mac-btn w-fit" value={settings.window} onChange={(event) => set("window", event.target.value as Settings["window"])}><option value="app">Its own window (Chrome, Brave or Edge)</option><option value="tab">A tab in the default browser</option></select></div>
                   <div className={row}><label htmlFor="settings-terminal">Terminal</label><select id="settings-terminal" className="mac-btn w-fit" value={settings.terminal} onChange={(event) => set("terminal", event.target.value as Settings["terminal"])}><option>Terminal</option><option>iTerm2</option><option>Warp</option></select></div>
                   <div className="space-y-3 pt-3">
                     <label className="flex items-start gap-2"><input type="checkbox" className="mt-0.5" checked={settings.startOnLaunch} onChange={(event) => set("startOnLaunch", event.target.checked)} />Start the sites that were running when DDEV Desktop last quit</label>
                     <label className="flex items-start gap-2"><input type="checkbox" className="mt-0.5" checked={settings.stopOnQuit} onChange={(event) => set("stopOnQuit", event.target.checked)} />When quitting, stop the sites this panel started</label>
                   </div>
                   <p className="pt-2 text-muted-foreground">Sites started from a terminal or another tool are left alone either way; DDEV Desktop never runs <code>ddev poweroff</code>.</p>
+                  <p className="text-muted-foreground">"Its own window" uses a Chromium browser's app mode (a real window, no tabs or address bar) and takes effect the next time <code>ddev desktop</code> opens the panel. Without one of those browsers it falls back to a tab.</p>
                 </Tabs.Content>
                 <Tabs.Content value="Ports" className="space-y-4">
                   <div className={row}><label htmlFor="settings-http">HTTP port</label><input id="settings-http" type="number" min={1} max={65535} required className="mac-input w-28" value={settings.httpPort} onChange={(event) => set("httpPort", event.target.value)} /></div>

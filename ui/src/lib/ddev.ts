@@ -40,6 +40,7 @@ export interface Settings {
   stopOnQuit: boolean;
   verbose: boolean;
   terminal: TerminalApp;
+  window: "app" | "tab"; // Chromium app window, or a tab in the default browser
   defaultPhp: string; // preselected for new sites; "" = DDEV's default
   httpPort: string;
   httpsPort: string;
@@ -120,6 +121,7 @@ export const DEFAULT_SETTINGS: Settings = {
   stopOnQuit: true,
   verbose: false,
   terminal: "Terminal",
+  window: "app",
   defaultPhp: "",
   httpPort: "80",
   httpsPort: "443",
@@ -214,7 +216,7 @@ interface ApiDetails extends ApiProject {
 }
 
 interface ApiSettings {
-  panel: { default_php: string; terminal: TerminalApp; start_on_launch: boolean; stop_on_quit: boolean; verbose: boolean };
+  panel: { default_php: string; terminal: TerminalApp; window: "app" | "tab"; start_on_launch: boolean; stop_on_quit: boolean; verbose: boolean };
   global: { router_http_port: string; router_https_port: string; project_tld: string; active_http_port: string; active_https_port: string };
   files: { global_config: string };
 }
@@ -225,6 +227,7 @@ function fromApiSettings(a: ApiSettings): Settings {
     stopOnQuit: a.panel.stop_on_quit,
     verbose: a.panel.verbose,
     terminal: a.panel.terminal,
+    window: a.panel.window || "app",
     defaultPhp: a.panel.default_php,
     httpPort: a.global.router_http_port,
     httpsPort: a.global.router_https_port,
@@ -237,7 +240,7 @@ function fromApiSettings(a: ApiSettings): Settings {
 
 function toApiSettings(s: Settings): Omit<ApiSettings, "files"> {
   return {
-    panel: { default_php: s.defaultPhp, terminal: s.terminal, start_on_launch: s.startOnLaunch, stop_on_quit: s.stopOnQuit, verbose: s.verbose },
+    panel: { default_php: s.defaultPhp, terminal: s.terminal, window: s.window, start_on_launch: s.startOnLaunch, stop_on_quit: s.stopOnQuit, verbose: s.verbose },
     global: { router_http_port: s.httpPort, router_https_port: s.httpsPort, project_tld: s.tld, active_http_port: "", active_https_port: "" },
   };
 }
@@ -273,10 +276,11 @@ async function job(path: string, body: unknown, onLine: OnLine): Promise<JobResu
 }
 
 export const ddev = {
-  async list(): Promise<Site[]> {
-    const { projects } = await api<{ projects: ApiProject[] }>("/api/projects");
+  /** Every project, most recently started first, plus how many to show without a filter. */
+  async list(): Promise<{ sites: Site[]; limit: number }> {
+    const { projects, limit } = await api<{ projects: ApiProject[]; limit: number }>("/api/projects");
     const https = read<Record<string, boolean>>(KEY_HTTPS, {});
-    return projects.map((p) => ({
+    const sites = projects.map((p) => ({
       name: p.name,
       type: p.type,
       status: p.status,
@@ -290,6 +294,7 @@ export const ddev = {
       lastUsed: p.last_used?.startsWith("0001") ? "" : p.last_used,
       https: https[p.name] ?? p.primary_url.startsWith("https"),
     }));
+    return { sites, limit };
   },
 
   async describe(name: string): Promise<SiteDetails> {

@@ -19,7 +19,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -42,7 +41,7 @@ var version = "dev"
 
 func main() {
 	port := flag.Int("port", 0, "port to listen on (default: a free one)")
-	limit := flag.Int("limit", 20, "maximum number of projects to show")
+	limit := flag.Int("limit", 20, "projects shown in the sidebar when not searching")
 	noOpen := flag.Bool("no-open", false, "do not open the browser")
 	stateFlag := flag.String("state-dir", "", "where daemon.json, settings.json and state.json live (default ~/.ddev-desktop)")
 	showVersion := flag.Bool("version", false, "print the version and exit")
@@ -63,7 +62,7 @@ func main() {
 	if running, ok := alive(infoPath); ok {
 		logger.Printf("already running at %s (pid %d)", running.URL, running.PID)
 		if !*noOpen {
-			openBrowser(running.URL)
+			api.OpenWindow(running.URL, (&api.Server{StateDir: dir}).Panel().Window, logger)
 		}
 		return
 	}
@@ -118,7 +117,7 @@ func main() {
 
 	logger.Printf("ddev-desktop %s listening on %s (Ctrl-C to quit)", version, url)
 	if !*noOpen {
-		openBrowser(url)
+		api.OpenWindow(url, server.Panel().Window, logger)
 	}
 	if err := srv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		logger.Fatal(err)
@@ -175,19 +174,4 @@ func newToken() string {
 	b := make([]byte, 16)
 	rand.Read(b)
 	return hex.EncodeToString(b)
-}
-
-func openBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	if err := cmd.Start(); err != nil {
-		log.Printf("open browser: %v (open %s yourself)", err, url)
-	}
 }

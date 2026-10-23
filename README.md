@@ -21,15 +21,17 @@ The add-on installs one host command globally (`~/.ddev/commands/host/desktop`),
 so `ddev desktop` works from any directory afterwards. The first run
 downloads the daemon binary for your platform (macOS or Linux, Intel or
 Apple Silicon) into `~/.ddev-desktop/bin/` from the latest release, then
-opens the panel in your browser. Press Ctrl-C in that terminal to quit.
+opens the panel in its own window (Chrome, Brave or Edge in app mode) or,
+without one of those, in a browser tab. Press Ctrl-C in that terminal to
+quit.
 
 `ddev desktop --update` downloads the latest binary again.
 
 ## What it does
 
-- **Lists your 20 most recently started projects** with a live status
-  dot, and shows the selected project's URL, code folder, database, type
-  and PHP version.
+- **Lists your projects**, most recently started first, with a live
+  status dot; search by name or filter by type to find any of them. Shows
+  the selected project's URL, code folder, database, type and PHP version.
 - **Start, Stop**, with ddev's output streaming into the panel. Only the
   project you act on is touched; the panel never runs `ddev poweroff`.
 - **Change PHP version** from a dropdown; a running project is restarted.
@@ -44,7 +46,7 @@ opens the panel in your browser. Press Ctrl-C in that terminal to quit.
   latest joomla.org release.
 - **Remove** a project from DDEV (`ddev delete`), with or without a
   snapshot; the code stays on disk.
-- **Settings:** terminal app; start the sites that were running when the
+- **Settings:** own window or browser tab; terminal app; start the sites that were running when the
   panel last quit; stop the sites the panel started when quitting; DDEV's
   global HTTP/HTTPS ports and TLD; a default PHP version for new sites;
   Edit buttons for a project's `.ddev/config.yaml`, its `php/` and
@@ -53,15 +55,16 @@ opens the panel in your browser. Press Ctrl-C in that terminal to quit.
 
 ![New site dialog](SCREENSHOTS/sprint-3-new-site-dialog.jpg)
 ![Settings, Logs tab](SCREENSHOTS/sprint-4-settings-logs.jpg)
+![In its own window](SCREENSHOTS/sprint-6-app-window.jpg)
 
 ## Good to know
 
 - **DDEV is the source of truth.** The panel keeps only its own
   preferences in `~/.ddev-desktop/settings.json`. Everything else is read
   from `ddev list`, `ddev describe` and `ddev config global` each time.
-- **Twenty projects, for now.** With more, the sidebar shows the twenty
-  whose last `ddev start` is most recent. Search and grouping are on the
-  list.
+- **Twenty at a glance.** The sidebar shows the twenty projects whose
+  last `ddev start` is most recent; search, the type filter or "Show all"
+  reach the rest.
 - **Ports.** The panel uses whatever URLs ddev reports. If another tool
   holds ports 80 and 443, DDEV 1.25 moves its router to other ports and
   the Settings dialog says which.

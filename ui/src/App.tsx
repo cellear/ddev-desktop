@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Settings as Gear, SquareTerminal } from "lucide-react";
+import { Search, Settings as Gear, SquareTerminal, X } from "lucide-react";
 import { SettingsDialog } from "@/components/settings-dialog";
 import { SiteDialog } from "@/components/site-dialog";
 import {
@@ -29,8 +29,15 @@ interface Job {
 
 const POLL_MS = 10_000;
 
+/** True inside a Chromium --app window: the OS draws the frame, we do not. */
+const APP_WINDOW = typeof window !== "undefined" && window.matchMedia?.("(display-mode: standalone)").matches;
+
 export default function App() {
   const [sites, setSites] = useState<Site[]>([]);
+  const [limit, setLimit] = useState(20);
+  const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("");
+  const [showAll, setShowAll] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [selected, setSelected] = useState<string | null>(null);
@@ -48,8 +55,9 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const list = await ddev.list();
+      const { sites: list, limit } = await ddev.list();
       setSites(list);
+      setLimit(limit);
       setLoadError(null);
       setSelected((cur) =>
         cur && (list.some((s) => s.name === cur) || cur === pending.current) ? cur : (list[0]?.name ?? null),
@@ -145,26 +153,65 @@ export default function App() {
     }
   };
 
+  // Sidebar: search and type filter over every project; without a filter,
+  // only the most recently started `limit` unless "Show all".
+  const q = query.trim().toLowerCase();
+  const filtering = q !== "" || typeFilter !== "";
+  const matches = sites.filter(
+    (s) =>
+      (!typeFilter || s.type === typeFilter) &&
+      (!q || s.name.toLowerCase().includes(q) || siteHost(s).toLowerCase().includes(q) || s.type.toLowerCase().includes(q)),
+  );
+  const visible = filtering || showAll || limit <= 0 ? matches : matches.slice(0, limit);
+  const typeCounts = sites.reduce<Record<string, number>>((acc, s) => {
+    const t = s.type || "unknown";
+    acc[t] = (acc[t] ?? 0) + 1;
+    return acc;
+  }, {});
+  const types = Object.keys(typeCounts).sort();
+
   const phpLabel = (v: string) => (v === "default" ? `Default (${settings.defaultPhp || "DDEV"})` : v);
   const dotClass = (s: Site) =>
     s.status === "running" ? "bg-light-green" : s.status === "paused" ? "bg-light-yellow" : "bg-status-off";
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-desk p-6 font-sans text-[13px] text-foreground">
-      <div className="flex h-[640px] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-window shadow-window">
-        <TitleBar title="DDEV Desktop">
+    <div className={APP_WINDOW ? "h-screen font-sans text-[13px] text-foreground" : "flex min-h-screen items-center justify-center bg-desk p-6 font-sans text-[13px] text-foreground"}>
+      <div className={APP_WINDOW ? "flex h-full w-full flex-col overflow-hidden bg-window" : "flex h-[640px] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-window shadow-window"}>
+        {!APP_WINDOW && <TitleBar title="DDEV Desktop" />}
+
+        <div className="flex items-center gap-2 px-3 pt-3">
+          <div className="relative w-80 shrink-0">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              aria-label="Search projects"
+              className="mac-input w-full !pl-7 !pr-7"
+              placeholder="Search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button aria-label="Clear search" className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground" onClick={() => setQuery("")}>
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <select aria-label="Project type" className="mac-btn !pl-2" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+            <option value="">All types ({sites.length})</option>
+            {types.map((t) => <option key={t} value={t}>{t} ({typeCounts[t]})</option>)}
+          </select>
+          <span className="flex-1" />
           <button
             aria-label="Settings"
             onClick={() => setDialog("settings")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-selection"
+            className="rounded p-1 text-muted-foreground hover:bg-selection"
           >
             <Gear className="h-4 w-4" />
           </button>
-        </TitleBar>
+        </div>
 
-        <div className="flex min-h-0 flex-1 gap-0 px-3 pt-3">
+        <div className="flex min-h-0 flex-1 gap-0 px-3 pt-2">
           <ul className="w-80 shrink-0 overflow-auto bg-pane py-1">
-            {sites.map((s) => (
+            {visible.map((s) => (
               <li key={s.name}>
                 <button
                   onClick={() => setSelected(s.name)}
@@ -181,6 +228,18 @@ export default function App() {
             ))}
             {loadError && <li className="px-6 py-3 text-destructive">{loadError}</li>}
             {!loadError && sites.length === 0 && <li className="px-6 py-3 text-muted-foreground">Loading projects…</li>}
+            {sites.length > 0 && filtering && (
+              <li className="px-4 py-2 text-muted-foreground">
+                {matches.length === 0 ? "No projects match." : `${matches.length} of ${sites.length} match.`}{" "}
+                <button className="text-link underline" onClick={() => { setQuery(""); setTypeFilter(""); }}>Clear</button>
+              </li>
+            )}
+            {sites.length > 0 && !filtering && limit > 0 && sites.length > limit && (
+              <li className="px-4 py-2 text-muted-foreground">
+                {showAll ? `All ${sites.length} projects.` : `${limit} most recently started of ${sites.length}.`}{" "}
+                <button className="text-link underline" onClick={() => setShowAll((v) => !v)}>{showAll ? "Show recent" : "Show all"}</button>
+              </li>
+            )}
           </ul>
 
           <div className="relative flex min-h-0 flex-1 flex-col px-6 py-2">
@@ -260,7 +319,7 @@ export default function App() {
               </>
             ) : job && job.site === selected ? (
               <>
-                <p className="text-[15px]">Creating <b>{job.site}</b>…</p>
+                <p className="text-[15px]">{busyLabel(job.label).replace("…", "")} <b>{job.site}</b>…</p>
                 <JobLog job={job} onClose={() => setJob(null)} />
               </>
             ) : (

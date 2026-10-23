@@ -25,7 +25,7 @@ const cookieName = "ddev_desktop_token"
 type Server struct {
 	DDEV   *ddev.Runner
 	Token  string // per-launch secret; every request must present it
-	Limit  int    // maximum projects returned by /api/projects
+	Limit  int    // projects the page shows without a filter
 	Static fs.FS  // the built page (ui/dist)
 	Log    *log.Logger
 	// StateDir holds settings.json and state.json (~/.ddev-desktop).
@@ -121,9 +121,8 @@ func (s *Server) listProjects(w http.ResponseWriter, r *http.Request) {
 		httpError(w, err)
 		return
 	}
-	if s.Limit > 0 && len(projects) > s.Limit {
-		projects = projects[:s.Limit]
-	}
+	// Every project goes to the page (most recently started first); limit
+	// is how many it shows when nothing is being searched for.
 	writeJSON(w, map[string]any{"projects": projects, "limit": s.Limit})
 }
 
