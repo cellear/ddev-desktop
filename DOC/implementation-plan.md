@@ -106,9 +106,9 @@ stop-on-quit (`ddev stop` for projects the panel started, never
 
 ### Sprint 5: Ship as an add-on
 
-Host command `commands/host/desktop` (find or download the binary, run it;
-first run also copies itself to `~/.ddev/commands/host/` so `ddev desktop`
-works from any directory). `install.yaml`. Release workflow that builds
+Host command `commands/host/desktop` (find or download the binary, run
+it), installed through `install.yaml`'s `global_files` so `ddev desktop`
+works from any directory (no copy-itself step needed). Release workflow that builds
 `ui/dist` and the four binaries (darwin/linux × amd64/arm64) in one job.
 README with screenshots.
 

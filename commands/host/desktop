@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+#ddev-generated
+## Description: Open DDEV Desktop, a control panel for your DDEV projects, in your browser
+## Usage: desktop [--update] [--port N] [--no-open] [--limit N] [--version]
+## Example: "ddev desktop" or "ddev desktop --update" or "ddev desktop --port 8471 --no-open"
+## Flags: [{"Name":"update","Usage":"Download the latest ddev-desktop binary before starting"},{"Name":"version","Usage":"Print the daemon's version and exit"},{"Name":"port","Type":"int","DefValue":"0","Usage":"Port to listen on (default: a free one)"},{"Name":"no-open","Usage":"Do not open the browser"},{"Name":"limit","Type":"int","DefValue":"20","Usage":"Maximum number of projects to show"}]
+## CanRunGlobally: true
+
+# Finds (or downloads) the ddev-desktop daemon and runs it in the
+# foreground. Press Ctrl-C to quit; with the "stop on quit" setting on,
+# the sites the panel started are stopped then. Every flag except
+# --update is passed to the daemon (they are declared above only so that
+# ddev's own flag parsing lets them through).
+
+set -euo pipefail
+
+REPO="cellear/ddev-desktop"
+INSTALL_DIR="$HOME/.ddev-desktop/bin"
+BINARY="$INSTALL_DIR/ddev-desktop"
+
+update=false
+args=()
+for a in "$@"; do
+  case "$a" in
+    --update) update=true ;;
+    *) args+=("$a") ;;
+  esac
+done
+
+download() {
+  local os arch url
+  os=$(uname -s | tr '[:upper:]' '[:lower:]')
+  arch=$(uname -m)
+  case "$arch" in
+    x86_64) arch="amd64" ;;
+    arm64|aarch64) arch="arm64" ;;
+    *) echo "ddev desktop: unsupported architecture: $arch" >&2; exit 1 ;;
+  esac
+  case "$os" in
+    darwin|linux) ;;
+    *) echo "ddev desktop: unsupported OS: $os (macOS and Linux only for now)" >&2; exit 1 ;;
+  esac
+  url="https://github.com/$REPO/releases/latest/download/ddev-desktop-${os}-${arch}"
+  echo "ddev desktop: downloading $url"
+  mkdir -p "$INSTALL_DIR"
+  if ! curl -fsSL "$url" -o "$BINARY.tmp"; then
+    echo "ddev desktop: download failed. See https://github.com/$REPO/releases" >&2
+    rm -f "$BINARY.tmp"
+    exit 1
+  fi
+  chmod +x "$BINARY.tmp"
+  mv "$BINARY.tmp" "$BINARY"
+  echo "ddev desktop: installed $("$BINARY" --version) to $BINARY"
+}
+
+if $update; then
+  download
+  cmd="$BINARY"
+elif [ -n "${DDEV_DESKTOP_BIN:-}" ] && [ -x "$DDEV_DESKTOP_BIN" ]; then
+  cmd="$DDEV_DESKTOP_BIN"             # explicit override, handy for development
+elif command -v ddev-desktop >/dev/null 2>&1; then
+  cmd="ddev-desktop"                  # on PATH, e.g. from `make install`
+elif [ -x "$BINARY" ]; then
+  cmd="$BINARY"
+else
+  download
+  cmd="$BINARY"
+fi
+
+exec "$cmd" "${args[@]+"${args[@]}"}"

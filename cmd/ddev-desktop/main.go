@@ -37,12 +37,20 @@ type daemonInfo struct {
 	URL   string `json:"url"`
 }
 
+// version is set at build time: -ldflags "-X main.version=v1.2.3".
+var version = "dev"
+
 func main() {
 	port := flag.Int("port", 0, "port to listen on (default: a free one)")
 	limit := flag.Int("limit", 20, "maximum number of projects to show")
 	noOpen := flag.Bool("no-open", false, "do not open the browser")
 	stateFlag := flag.String("state-dir", "", "where daemon.json, settings.json and state.json live (default ~/.ddev-desktop)")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println("ddev-desktop", version)
+		return
+	}
 
 	logger := log.New(os.Stderr, "ddev-desktop: ", log.Ltime)
 
@@ -108,7 +116,7 @@ func main() {
 		srv.Shutdown(shutdownCtx)
 	}()
 
-	logger.Printf("listening on %s", url)
+	logger.Printf("ddev-desktop %s listening on %s (Ctrl-C to quit)", version, url)
 	if !*noOpen {
 		openBrowser(url)
 	}

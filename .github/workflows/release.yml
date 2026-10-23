@@ -1,6 +1,9 @@
 name: Release
 
-# Triggered by pushing a version tag: git tag v0.5.0 && git push --tags
+# Triggered by pushing a version tag: git tag v0.1.0 && git push --tags
+# The release carries the four daemon binaries plus checksums.txt; the
+# add-on itself (install.yaml + commands/) is the tagged source, which
+# `ddev add-on get cellear/ddev-desktop` fetches from the latest release.
 on:
   push:
     tags:
@@ -33,10 +36,12 @@ jobs:
             for arch in amd64 arm64; do
               echo "Building ${os}/${arch}..."
               GOOS=$os GOARCH=$arch go build \
+                -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
                 -o dist/ddev-desktop-${os}-${arch} \
                 ./cmd/ddev-desktop/
             done
           done
+          (cd dist && sha256sum ddev-desktop-* > checksums.txt)
           ls -lh dist/
 
       - name: Create GitHub Release and upload binaries

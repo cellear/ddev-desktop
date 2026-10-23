@@ -131,6 +131,24 @@ Every ddev call runs with `DDEV_NONINTERACTIVE=true`, `NO_COLOR=1` and
 - `open -t <file>` opens the default text editor (TextEdit unless changed);
   `open <folder>` opens Finder.
 
+## Add-on packaging (sprint 5)
+
+- `install.yaml` `global_files:` installs into `~/.ddev/`, so a host
+  command listed there becomes `~/.ddev/commands/host/<name>` and works
+  from any directory when the script carries `## CanRunGlobally: true`.
+  `ddev add-on get` still has to be run inside some project (it records
+  the add-on in that project's `.ddev/addon-metadata/`), and `ddev add-on
+  remove` from that same project runs `removal_actions` and deletes the
+  global file.
+- ddev parses a custom command's flags itself from the `## Flags:` JSON
+  annotation and rejects anything undeclared ("unknown flag") before the
+  script runs. `"Type":"int"` and `"DefValue"` are accepted, so daemon
+  flags can be declared purely for pass-through.
+- `ddev add-on get` always ends with "Use `ddev restart` to enable …",
+  even when nothing in the project changed.
+- Host commands inherit the environment, so `DDEV_DESKTOP_BIN=… ddev
+  desktop` works as a development override.
+
 ## Timings seen
 
 | Command | Time |
