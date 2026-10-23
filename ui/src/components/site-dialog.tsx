@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  CREATE_RECIPES,
   ddev,
   PHP_VERSIONS,
   PROJECT_TYPES,
@@ -9,10 +10,10 @@ import {
 } from "@/lib/ddev";
 
 /**
- * "New Drupal site…" and "Import local site…". Both turn a folder into a
- * DDEV project; New also offers to create a fresh Drupal codebase with
- * Composer when the folder is empty or missing, Import also offers a
- * database dump. Nothing runs until the daemon's pre-flight check allows it.
+ * "New site…" and "Import local site…". Both turn a folder into a DDEV
+ * project; New also offers to create a fresh codebase (Drupal, WordPress or
+ * Joomla, see CREATE_RECIPES) when the folder is empty or missing, Import
+ * also offers a database dump. Nothing runs until the daemon's pre-flight check allows it.
  */
 export function SiteDialog({ mode, settings, chooser, onCancel, onOk, Modal, Footer }: {
   mode: "new" | "import";
@@ -56,22 +57,23 @@ export function SiteDialog({ mode, settings, chooser, onCancel, onOk, Modal, Foo
     return () => clearTimeout(t);
   }, [approot, name, nameTouched]);
 
-  const isDrupal = type.startsWith("drupal");
-  const create = mode === "new" && !!check && (!check.exists || check.empty) && isDrupal;
+  const recipe = mode === "new" ? CREATE_RECIPES[type] : undefined;
+  const create = !!recipe && !!check && (!check.exists || check.empty);
+  const creatable = Object.keys(CREATE_RECIPES).join(", ");
   const wantsDump = mode === "import" && dbMode === "import";
 
   // The verdict shown under the fields, and whether OK is allowed.
   let verdict: { text: string; ok: boolean; warn?: boolean } | null = null;
   if (check?.error) verdict = { text: check.error, ok: false };
   else if (check && !check.exists) {
-    verdict = isDrupal && mode === "new"
-      ? { text: "Folder does not exist: it will be created and a fresh Drupal codebase installed with Composer.", ok: true, warn: true }
-      : { text: "Folder not found.", ok: false };
+    verdict = recipe
+      ? { text: `Folder does not exist: it will be created, with ${recipe}.`, ok: true, warn: true }
+      : { text: "Folder not found." + (mode === "new" ? ` To create a new site here, pick one of: ${creatable}.` : ""), ok: false };
   } else if (check && !check.is_dir) verdict = { text: "That path is a file, not a folder.", ok: false };
   else if (check && check.empty) {
-    verdict = isDrupal && mode === "new"
-      ? { text: "Empty folder: a fresh Drupal codebase will be installed with Composer (a few minutes).", ok: true, warn: true }
-      : { text: "The folder is empty. Choose a folder that holds the code" + (mode === "new" ? ", or pick a Drupal type to create one." : "."), ok: false };
+    verdict = recipe
+      ? { text: `Empty folder: it will get ${recipe}.`, ok: true, warn: true }
+      : { text: "The folder is empty. Choose a folder that holds the code" + (mode === "new" ? `, or pick one of ${creatable} to create a site here.` : "."), ok: false };
   } else if (check?.has_ddev && check.ddev_name && check.ddev_name.toLowerCase() !== name.toLowerCase()) {
     verdict = { text: `This folder is already the DDEV project “${check.ddev_name}”. Use that name to adopt it, or a different folder.`, ok: false };
   } else if (check?.name_taken) verdict = { text: `A project named “${name}” already exists.`, ok: false };
@@ -102,7 +104,7 @@ export function SiteDialog({ mode, settings, chooser, onCancel, onOk, Modal, Foo
     });
 
   return (
-    <Modal title={mode === "new" ? "New Drupal site" : "Import local site"} onClose={onCancel} width="max-w-2xl">
+    <Modal title={mode === "new" ? "New site" : "Import local site"} onClose={onCancel} width="max-w-2xl">
       <div className="space-y-3">
         <div className={row}>
           <label htmlFor="site-approot">Local codebase</label>

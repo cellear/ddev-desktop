@@ -30,7 +30,8 @@ func init() {
 	}
 }
 
-// composerPackage is what "New Drupal site" creates in an empty folder.
+// composerPackage is what "New site…" creates in an empty folder for the
+// Drupal types; see recipes.go for the others.
 func composerPackage(projectType string) string {
 	switch projectType {
 	case "drupal10":
@@ -195,11 +196,11 @@ type createSpec struct {
 	PHP     string `json:"php"`
 	Docroot string `json:"docroot"`
 	Dump    string `json:"dump"`
-	Create  bool   `json:"create"` // fresh Drupal codebase via Composer
+	Create  bool   `json:"create"` // fresh codebase per recipes.go
 }
 
 // createProject: POST /api/projects. Validates, then runs config, start,
-// optional composer create-project and optional import-db as one job.
+// an optional fresh-codebase recipe and optional import-db as one job.
 func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 	var spec createSpec
 	if err := readJSON(r, &spec); err != nil {
@@ -246,7 +247,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 	}
 
 	c := inspect(approot)
-	pkg := composerPackage(spec.Type)
+	rec := recipeFor(spec.Type)
 	switch {
 	case !c.Exists && !spec.Create:
 		bad("folder not found: " + approot)
@@ -255,13 +256,13 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		bad("not a folder: " + approot)
 		return
 	case spec.Create && c.Exists && !c.Empty:
-		bad("a fresh Drupal codebase needs an empty folder")
+		bad("a fresh codebase needs an empty folder")
 		return
 	case !spec.Create && c.Exists && c.Empty:
 		bad("the folder is empty; choose one that holds the site's code")
 		return
-	case spec.Create && pkg == "":
-		bad("a fresh codebase can only be created for a Drupal project type")
+	case spec.Create && rec == nil:
+		bad("a fresh codebase can be created only for Drupal, WordPress or Joomla")
 		return
 	case c.HasDdev && c.DdevName != "" && !strings.EqualFold(c.DdevName, spec.Name):
 		http.Error(w, fmt.Sprintf("this folder is already the DDEV project %q", c.DdevName), http.StatusConflict)
@@ -279,7 +280,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 
 	docroot := spec.Docroot
 	if spec.Create && docroot == "" {
-		docroot = "web" // drupal/recommended-project's docroot
+		docroot = rec.docroot
 	}
 	configArgs := []string{"config", "--auto", "--project-name", spec.Name}
 	if spec.Type != "" {
@@ -294,7 +295,7 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 
 	title := "ddev config + start " + spec.Name
 	if spec.Create {
-		title += " + composer create-project"
+		title += " + " + rec.title
 	}
 	if dump != "" {
 		title += " + import-db"
@@ -306,6 +307,11 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 			if err := os.MkdirAll(approot, 0o755); err != nil {
 				return err
 			}
+			if rec.before != nil {
+				if err := rec.before(ctx, approot, line); err != nil {
+					return err
+				}
+			}
 		}
 		line("$ ddev " + strings.Join(configArgs, " ") + "   (in " + approot + ")")
 		if err := s.DDEV.StreamIn(ctx, approot, line, configArgs...); err != nil {
@@ -315,9 +321,8 @@ func (s *Server) createProject(w http.ResponseWriter, r *http.Request) {
 		if err := s.DDEV.Stream(ctx, line, "start", spec.Name); err != nil {
 			return err
 		}
-		if spec.Create {
-			line("$ ddev composer create-project " + pkg + "   (this takes a few minutes)")
-			if err := s.DDEV.StreamIn(ctx, approot, line, "composer", "create-project", pkg); err != nil {
+		if spec.Create && rec.after != nil {
+			if err := rec.after(ctx, s, approot, line); err != nil {
 				return err
 			}
 		}

@@ -82,9 +82,17 @@ export interface Features {
 export const PHP_VERSIONS = ["7.4", "8.0", "8.1", "8.2", "8.3", "8.4", "8.5"];
 /** Project types offered in the dialog (ddev config --project-type accepts more). */
 export const PROJECT_TYPES = [
-  "drupal11", "drupal10", "drupal7", "backdrop", "wordpress", "php", "generic",
+  "drupal11", "drupal10", "drupal7", "backdrop", "wordpress", "joomla", "php", "generic",
   "laravel", "symfony", "typo3", "craftcms",
 ];
+
+/** Types "New site…" can build from scratch in an empty folder, and how (mirrors internal/api/recipes.go). */
+export const CREATE_RECIPES: Record<string, string> = {
+  drupal11: "a fresh Drupal 11 codebase installed with Composer (a few minutes)",
+  drupal10: "a fresh Drupal 10 codebase installed with Composer (a few minutes)",
+  wordpress: "the latest WordPress downloaded with WP-CLI (about a minute)",
+  joomla: "the latest Joomla downloaded from joomla.org and unpacked",
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   startOnLaunch: true,

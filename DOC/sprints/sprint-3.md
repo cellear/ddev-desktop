@@ -76,12 +76,23 @@ Not available on Linux (button hidden when the daemon reports no chooser).
 
 ---
 
+## Follow-ups from acceptance (2026-10-22)
+
+- Luke: can WordPress and other types be imported? Import always could
+  (anything `ddev config --auto` accepts). The dropdown's eleven types were
+  my pick, not a limit; the daemon takes all 27.
+- `[done]` "New Drupal site…" is now "New site…" and can create WordPress
+  (`ddev wp core download`) and Joomla (joomla.org zip) as well as Drupal,
+  each following DDEV's quickstart. Joomla added to the dropdown.
+  Verified: both installers answer; see `DOC/ddev-notes.md`.
+- Favicon is now DDEV's icon instead of the Lovable one.
+
 ## Demo
 
 1. More → Import local site… → Choose… → pick `DevDesktop-sites/duotest`;
    name `duotest3`; database: import `DevDesktop-sites/ddtest.sql`; OK. Log
    shows config, start, import; site opens.
-2. + → New Drupal site… → an empty folder under `~/Sites/REA/`; type
+2. + → New site… → an empty folder under `~/Sites/REA/`; type
    drupal11; OK. Log shows Composer creating the project; Open in browser
    lands on the Drupal installer.
 3. Type the folder from step 1 again: the dialog says it is already

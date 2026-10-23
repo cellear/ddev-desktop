@@ -79,6 +79,21 @@ Every ddev call runs with `DDEV_NONINTERACTIVE=true`, `NO_COLOR=1` and
   `.ddev/`. About 3 minutes on this machine; its progress bars arrive as
   separate lines, which the log panel shows fine. Docroot is `web`; the
   daemon passes `--docroot web` to config beforehand.
+- Fresh codebases follow DDEV's quickstart recipes
+  (https://docs.ddev.com/en/stable/users/quickstart/), in
+  `internal/api/recipes.go`:
+  - Drupal: `ddev composer create-project` as above (after start).
+  - WordPress: `ddev config --project-type wordpress`, start, then
+    `ddev wp core download` in the folder (WP-CLI ships in the web
+    container). Docroot is the project root. About 20 s.
+  - Joomla: download `https://www.joomla.org/latest` (redirects to the
+    release zip, 35 MB for 6.2.0), unpack into the folder (files are at the
+    zip's top level), write `.ddev/php/joomla.ini` with `display_errors =
+    off` and `output_buffering = off` as the quickstart says, then config
+    and start. The daemon does the download and unzip itself (net/http +
+    archive/zip) so nothing beyond ddev is required. About 20 s.
+  - Other types import fine but have no create recipe; the server answers
+    400 and the dialog says which types can be created.
 - `ddev import-db N --file=<path> --no-progress` accepts .sql, .sql.gz,
   .tar(.gz/.bz2/.xz), .tgz and .zip. The dump must be readable by the
   daemon's user; it is streamed into the db container by ddev.
@@ -100,6 +115,13 @@ Every ddev call runs with `DDEV_NONINTERACTIVE=true`, `NO_COLOR=1` and
 | `ddev stop` | 3–5 s |
 | `ddev config` + `ddev start` + `import-db` (2 MB dump) | about 25 s |
 | `ddev composer create-project drupal/recommended-project:^11` | about 3 min |
+| config + start + `ddev wp core download` (WordPress 7.1.3) | about 22 s |
+| Joomla 6.2.0 zip download + unpack + config + start | about 24 s |
+
+On this machine Docksal's `docksal-vhost-proxy` holds ports 80 and 443, so
+DDEV's router sits on 33000/33001 and `*.ddev.site` on port 80 answers
+"Docksal :: Project missing". Always use the URLs `ddev describe` reports
+(the page does).
 
 The page polls `ddev list` every 10 s while visible. With 119 projects
 that is noticeable CPU; a future sprint could watch Docker events instead.

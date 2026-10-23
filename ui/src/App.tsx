@@ -262,7 +262,7 @@ export default function App() {
           {menu && (
             <div className="absolute bottom-12 left-2 z-10 w-60 rounded-lg bg-titlebar p-1 shadow-window" onMouseLeave={() => setMenu(false)}>
               {[
-                ["New Drupal site…", "new"],
+                ["New site…", "new"],
                 ["Import local site…", "import"],
                 ["Settings…", "settings"],
               ].map(([label, d]) => (

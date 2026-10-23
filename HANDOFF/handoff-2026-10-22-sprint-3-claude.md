@@ -86,6 +86,22 @@ accidental `dd-empty` were deleted through the API; folders removed.
 - `DOC/sprints/sprint-3.md` (new), `DOC/ddev-notes.md`, `README.md`
 - `SCREENSHOTS/sprint-3-new-site-dialog.jpg`
 
+## Follow-ups during acceptance (same day)
+
+- Favicon: DDEV's `apple-touch-icon.png` replaces the Lovable `favicon.ico`.
+- "New site…": creation generalised through `internal/api/recipes.go`
+  (`recipeFor(type)` → before/after steps around config and start).
+  Drupal via Composer as before; WordPress via `ddev wp core download`;
+  Joomla via download of `https://www.joomla.org/latest` + unzip in Go +
+  `.ddev/php/joomla.ini`. Dialog texts come from `CREATE_RECIPES` in
+  `ui/src/lib/ddev.ts`; Joomla added to `PROJECT_TYPES`. Verified on a
+  private daemon: WordPress 7.1.3 and Joomla 6.2.0 created in about 22 s
+  each, installers answered; scratch projects deleted.
+- Learned: Docksal's vhost-proxy owns ports 80/443 here, so DDEV's router
+  is on 33000/33001. `ddev describe` URLs are right; port-80 checks are not.
+- Sprint 3 open question "only Drupal via Composer" is resolved for
+  WordPress and Joomla. Remaining types import only.
+
 ## Next
 
 Sprint 4: Settings. Ports and TLD through `ddev config global`; panel
